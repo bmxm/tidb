@@ -161,6 +161,9 @@ var (
 	initializeInsecure = flagBoolean(nmInitializeInsecure, true, "bootstrap tidb-server in insecure mode")
 )
 
+// mysql -h 127.0.0.1 -P 4000 -u root
+// 更改密码(无需 FLUSH PRIVILEGES；) ALTER USER USER() IDENTIFIED BY '123456';
+
 func main() {
 	help := flag.Bool("help", false, "show the usage")
 	flag.Parse()
@@ -248,6 +251,7 @@ func checkTempStorageQuota() {
 	}
 }
 
+// 设置CPU亲和性
 func setCPUAffinity() {
 	if affinityCPU == nil || len(*affinityCPU) == 0 {
 		return
@@ -273,15 +277,19 @@ func setCPUAffinity() {
 	metrics.MaxProcs.Set(float64(runtime.GOMAXPROCS(0)))
 }
 
+// 注册store
 func registerStores() {
+	// 注册 tikv
 	err := kvstore.Register("tikv", driver.TiKVDriver{})
 	terror.MustNil(err)
+	// 注册默认存储引擎 mocktikv
 	err = kvstore.Register("mocktikv", mockstore.MockTiKVDriver{})
 	terror.MustNil(err)
 	err = kvstore.Register("unistore", mockstore.EmbedUnistoreDriver{})
 	terror.MustNil(err)
 }
 
+// 注册 prometheus 监控项
 func registerMetrics() {
 	metrics.RegisterMetrics()
 }
@@ -298,6 +306,7 @@ func createStoreAndDomain() (kv.Storage, *domain.Domain) {
 	return storage, dom
 }
 
+// 设置binlog信息
 func setupBinlogClient() {
 	cfg := config.GetGlobalConfig()
 	if !cfg.Binlog.Enable {
@@ -655,6 +664,7 @@ func printInfo() {
 	log.SetLevel(level)
 }
 
+// 创建TiDB server
 func createServer(storage kv.Storage, dom *domain.Domain) *server.Server {
 	cfg := config.GetGlobalConfig()
 	driver := server.NewTiDBDriver(storage)
@@ -671,6 +681,7 @@ func createServer(storage kv.Storage, dom *domain.Domain) *server.Server {
 	return svr
 }
 
+// 配置监控
 func setupMetrics() {
 	cfg := config.GetGlobalConfig()
 	// Enable the mutex profile, 1/10 of mutex blocking event sampling.
@@ -692,6 +703,7 @@ func setupMetrics() {
 	pushMetric(cfg.Status.MetricsAddr, time.Duration(cfg.Status.MetricsInterval)*time.Second)
 }
 
+// 注册分布式链路追踪
 func setupTracing() {
 	cfg := config.GetGlobalConfig()
 	tracingCfg := cfg.OpenTracing.ToTracingConfig()

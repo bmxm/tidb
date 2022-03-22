@@ -103,3 +103,9 @@ TiDB is under the Apache 2.0 license. See the [LICENSE](./LICENSE) file for deta
 
 - Thanks [cznic](https://github.com/cznic) for providing some great open source tools.
 - Thanks [GolevelDB](https://github.com/syndtr/goleveldb), [BoltDB](https://github.com/boltdb/bolt), and [RocksDB](https://github.com/facebook/rocksdb) for their powerful storage engines.
+
+
+TiDB 是一个支持 MySQL 协议，以某种支持事务的分布式 KV 存储引擎为底层存储的 SQL 引擎。
+
+整个项目使用 Go 语言开发，按照功能模块分了很多 Package，通过一些依赖分析工具，可以看到项目内部包之间的依赖关系。
+大部分包都以接口的形式对外提供服务，大部分功能也都集中在某个包中，不过有一些包提供了非常基础的功能，会被很多包依赖，这些包需要特别注意。

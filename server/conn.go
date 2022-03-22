@@ -1092,6 +1092,7 @@ func (cc *clientConn) Run(ctx context.Context) {
 		}
 
 		startTime := time.Now()
+		// 调用 dispatch 方法，处理收到的请求
 		err = cc.dispatch(ctx, data)
 		cc.chunkAlloc.Reset()
 		if err != nil {
@@ -1238,6 +1239,7 @@ func (cc *clientConn) addMetrics(cmd byte, startTime time.Time, err error) {
 // dispatch handles client request based on command which is the first byte of the data.
 // It also gets a token from server which is used to limit the concurrently handling clients.
 // The most frequently used command is ComQuery.
+// 参考MySQL协议: https://dev.mysql.com/doc/internals/en/client-server-protocol.html
 func (cc *clientConn) dispatch(ctx context.Context, data []byte) error {
 	defer func() {
 		// reset killed for each request
@@ -1263,6 +1265,7 @@ func (cc *clientConn) dispatch(ctx context.Context, data []byte) error {
 	cc.mu.Unlock()
 
 	cc.lastPacket = data
+	// handles client request based on command which is the first byte of the data
 	cmd := data[0]
 	data = data[1:]
 	if topsqlstate.TopSQLEnabled() {
@@ -1320,6 +1323,7 @@ func (cc *clientConn) dispatch(ctx context.Context, data []byte) error {
 		cc.ctx.SetProcessInfo("use "+dataStr, t, cmd, 0)
 	}
 
+	// 根据 Command 的类型，调用对应的处理函数
 	switch cmd {
 	case mysql.ComSleep:
 		// TODO: According to mysql document, this command is supposed to be used only internally.
@@ -1327,6 +1331,7 @@ func (cc *clientConn) dispatch(ctx context.Context, data []byte) error {
 		// Investigate this command and write test case later.
 		return nil
 	case mysql.ComQuit:
+		// 如果客户端断开链接，会走到这里
 		return io.EOF
 	case mysql.ComInitDB:
 		if err := cc.useDB(ctx, dataStr); err != nil {
@@ -1792,6 +1797,7 @@ func (cc *clientConn) audit(eventType plugin.GeneralEvent) {
 // As the execution time of this function represents the performance of TiDB, we do time log and metrics here.
 // There is a special query `load data` that does not return result, which is handled differently.
 // Query `load stats` does not return result either.
+// 此函数的执行时间代表TiDB的性能
 func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	defer trace.StartRegion(ctx, "handleQuery").End()
 	sc := cc.ctx.GetSessionVars().StmtCtx

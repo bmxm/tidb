@@ -246,6 +246,7 @@ func RotateSubWindow() {
 
 	err := readSQLMetric(time.Now(), &thisSubWindow.SQLUsage)
 	if err != nil {
+		// 为什么一直在打印这个？
 		logutil.BgLogger().Info("Error exists when getting the SQL Metric.")
 	}
 

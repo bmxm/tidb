@@ -357,6 +357,8 @@ func (s *Server) Run() error {
 	s.reportConfig()
 
 	// Start HTTP API to report tidb info such as TPS.
+	// 例如：报告 TPS
+	// Transactions Per Second，每秒处理的事务(一般指客户端发起请求到得到响应)数目
 	if s.cfg.Status.ReportStatus {
 		s.startStatusHTTP()
 	}
@@ -365,6 +367,9 @@ func (s *Server) Run() error {
 	errChan := make(chan error)
 	go s.startNetworkListener(s.listener, false, errChan)
 	go s.startNetworkListener(s.socket, true, errChan)
+
+	// 为什么要写下面的这4行代码？
+	// 这样会一个监听返回nil,只要另一个不返回，程序就不停止。
 	err := <-errChan
 	if err != nil {
 		return err
@@ -378,9 +383,11 @@ func (s *Server) startNetworkListener(listener net.Listener, isUnixSocket bool, 
 		return
 	}
 	for {
+		// 等待接收新的客户端连接
 		conn, err := listener.Accept()
 		if err != nil {
 			if opErr, ok := err.(*net.OpError); ok {
+				// 如果是用比较高的go版本的话，这里可以不用字符串对 error 进行的判断（ ErrNetClosing ）
 				if opErr.Err.Error() == "use of closed network connection" {
 					if s.inShutdownMode {
 						errChan <- nil
