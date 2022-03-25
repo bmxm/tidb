@@ -1994,6 +1994,9 @@ func (n *CallStmt) Accept(v Visitor) (Node, bool) {
 
 // InsertStmt is a statement to insert new rows into an existing table.
 // See https://dev.mysql.com/doc/refman/5.7/en/insert.html
+// 一条 SQL 语句经过 协议层、Parser、Plan、Executor 这样几个模块处理后，
+// 变成可执行的结构，再通过 Next() 来驱动语句的真正执行。
+// 对于 Insert 语句的解析逻辑 ，会先被解析成下面这个结构(AST)。
 type InsertStmt struct {
 	dmlNode
 
@@ -2001,7 +2004,10 @@ type InsertStmt struct {
 	IgnoreErr   bool
 	Table       *TableRefsClause
 	Columns     []*ColumnName
+
+	// Lists 二维数组中的每一行对应于一行数据
 	Lists       [][]ExprNode
+
 	Setlist     []*Assignment
 	Priority    mysql.PriorityEnum
 	OnDuplicate []*Assignment

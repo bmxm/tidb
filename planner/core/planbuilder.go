@@ -680,8 +680,11 @@ func (b *PlanBuilder) ResetForReuse() *PlanBuilder {
 }
 
 // Build builds the ast node to a Plan.
+// 将 AST 转成 Plan 结构
 func (b *PlanBuilder) Build(ctx context.Context, node ast.Node) (Plan, error) {
 	b.optFlag |= flagPrunColumns
+
+	// 通过断言获取类型。
 	switch x := node.(type) {
 	case *ast.AdminStmt:
 		return b.buildAdmin(ctx, x)
@@ -3343,6 +3346,13 @@ func (b *PlanBuilder) resolveGeneratedColumns(ctx context.Context, columns []*ta
 	return igc, nil
 }
 
+// 1-补全 Schema 信息, 包括 Database/Table/Column 信息(没有指定向哪些列插入数据，会使用所有的列)。
+// 2-处理 Lists 中的数据, 会处理一遍所有的 Value，将 ast.ExprNode 转换成 expression.Expression，
+// 也就是纳入了表达式框架，后面会在这个框架下求值。大多数情况下，这里的 Value 都是常量，也就是 expression.Constant。
+// 如果 Insert 语句比较复杂，比如要插入的数据来自于一个 Select，或者是 OnDuplicateUpdate 这种情况，还会做更多的处理
+//
+// 疑问：我在实际执行 INSERT 语句进行调试时，发现该函数被执行了两次，第一次执行完，Navicat已经显示成功，
+// 第二次是由什么触发的？
 func (b *PlanBuilder) buildInsert(ctx context.Context, insert *ast.InsertStmt) (Plan, error) {
 	ts, ok := insert.Table.TableRefs.Left.(*ast.TableSource)
 	if !ok {
@@ -3377,6 +3387,10 @@ func (b *PlanBuilder) buildInsert(ctx context.Context, insert *ast.InsertStmt) (
 		return nil, errors.Errorf("Can't get table %s.", tableInfo.Name.O)
 	}
 
+	// Insert 这个结构只实现了 Plan 这个接口，所以在 下面这个判断 中，不会走进 Optimize 流程
+	// if logic, ok := p.(LogicalPlan); ok {
+	//     return doOptimize(builder.optFlag, logic)
+	// }
 	insertPlan := Insert{
 		Table:         tableInPlan,
 		Columns:       insert.Columns,
@@ -3410,6 +3424,7 @@ func (b *PlanBuilder) buildInsert(ctx context.Context, insert *ast.InsertStmt) (
 	b.visitInfo = appendVisitInfo(b.visitInfo, mysql.InsertPriv, tn.DBInfo.Name.L,
 		tableInfo.Name.L, "", authErr)
 
+	// 除了插入可能还需要进行 更新 或者 删除
 	// `REPLACE INTO` requires both INSERT + DELETE privilege
 	// `ON DUPLICATE KEY UPDATE` requires both INSERT + UPDATE privilege
 	var extraPriv mysql.PrivilegeType
@@ -3431,6 +3446,7 @@ func (b *PlanBuilder) buildInsert(ctx context.Context, insert *ast.InsertStmt) (
 	mockTablePlan.names = insertPlan.tableColNames
 
 	checkRefColumn := func(n ast.Node) ast.Node {
+		// 如果 NeedFillDefaultValue 已为 false, 看需不需要将其置为 true。
 		if insertPlan.NeedFillDefaultValue {
 			return n
 		}
@@ -3443,17 +3459,22 @@ func (b *PlanBuilder) buildInsert(ctx context.Context, insert *ast.InsertStmt) (
 
 	if len(insert.Setlist) > 0 {
 		// Branch for `INSERT ... SET ...`.
+		// MySQL 特别支持 SET
+		// INSERT INTO tablename SET column_name1  =  value1, column_name2  =  value2，…;
 		err := b.buildSetValuesOfInsert(ctx, insert, insertPlan, mockTablePlan, checkRefColumn)
 		if err != nil {
 			return nil, err
 		}
 	} else if len(insert.Lists) > 0 {
 		// Branch for `INSERT ... VALUES ...`.
+		// 标准的 INSERT 语句
+		// INSERT INTO tablename(列名) VALUES(列值);
 		err := b.buildValuesListOfInsert(ctx, insert, insertPlan, mockTablePlan, checkRefColumn)
 		if err != nil {
 			return nil, err
 		}
 	} else {
+		// INSERT INTO table1 (table1.column1, table1.column2) SELECT table2.column1, table2.column2 FROM table2 WHERE ..;
 		// Branch for `INSERT ... SELECT ...`.
 		err := b.buildSelectPlanOfInsert(ctx, insert, insertPlan)
 		if err != nil {
