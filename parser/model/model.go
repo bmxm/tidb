@@ -30,6 +30,15 @@ import (
 // SchemaState is the state for schema elements.
 type SchemaState byte
 
+// TiDB是一个分布式数据库，需要对整个集群中的所有模式有一个一致的视图。
+// 为了以更异步的方式实现这一点，系统使用内部状态，
+// 其中每个单阶段转换都已完成，以便旧/前一阶段与新/当前状态兼容，
+// 从而允许不同的TiDB节点具有不同版本的模式定义。
+// 群集中的所有TiDB服务器最多同时共享两个架构版本/状态，
+// 因此在移动到下一个状态更改之前，所有当前可用的TiDB服务器都需要与当前状态同步。
+//
+// 注意：这是一个与MySQL截然不同的实现，MySQL使用元数据锁（Meta Data Locks，MDL）一次保存一个版本的MySQL实例模式。
+// 这导致MySQL副本可以有不同版本的模式，这是由于异步复制的滞后。TiDB始终对集群中的所有模式具有一致的视图。
 const (
 	// StateNone means this schema element is absent and can't be used.
 	StateNone SchemaState = iota
